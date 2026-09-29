@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة مقابلات نادي التواصل الصحي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(10px); }
+        .glow-blue { box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-2xl glass border border-slate-800 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
+        
+        <!-- Header & Logo -->
+        <div class="text-center mb-8">
+            <img src="logo.jpg" alt="Tawassol Sihi Logo" class="w-28 h-28 mx-auto rounded-full border-2 border-sky-400 glow-blue mb-4 object-cover">
+            <h1 class="text-3xl font-extrabold text-sky-400 mb-2">منصة مقابلات نادي التواصل الصحي</h1>
+            <p class="text-slate-400 text-sm" dir="ltr">Plateforme de Recrutement Automatisée</p>
+        </div>
+
+        <!-- Section 1: Login / Phone Check -->
+        <div id="login-section" class="space-y-6">
+            <p class="text-center text-slate-300">أدخل رقم هاتفك للتحقق أو الحجز / Entrez votre numéro de téléphone</p>
+            <div class="flex flex-col gap-4 max-w-sm mx-auto">
+                <input type="text" id="phone-input" placeholder="06XXXXXXXX" dir="ltr" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-sky-400 text-center text-xl tracking-wider text-white">
+                <button id="login-btn" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl transition glow-blue">
+                    Rechercher / بحث
+                </button>
+            </div>
+            <p id="error-msg" class="text-red-400 text-center text-sm hidden"></p>
+        </div>
+
+        <!-- Section 2: Already Booked (Motivational Message) -->
+        <div id="booked-section" class="hidden text-center space-y-4" dir="ltr">
+            <div class="inline-block p-4 rounded-2xl bg-slate-900 border border-slate-700 w-full">
+                <h2 class="text-2xl font-bold text-white mb-2">Bonjour <span id="user-name" class="text-sky-400"></span> !</h2>
+                <p class="text-slate-300 mb-4">Tu as déjà choisi ton créneau d'entretien. Nous sommes impatients de te rencontrer !</p>
+                
+                <div class="flex justify-center gap-6 mt-6">
+                    <div class="bg-slate-800 p-4 rounded-xl border border-sky-500/30 w-32">
+                        <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Heure</p>
+                        <p id="booked-time" class="text-xl font-bold text-sky-400"></p>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-xl border border-sky-500/30 w-32">
+                        <p class="text-xs text-slate-400 uppercase tracking-widest mb-1">Table</p>
+                        <p id="booked-table" class="text-xl font-bold text-emerald-400"></p>
+                    </div>
+                </div>
+                
+                <p class="mt-6 text-sm text-sky-300 font-medium italic">"Le succès commence par la volonté de communiquer." <br> À demain !</p>
+            </div>
+        </div>
+
+        <!-- Section 3: Slot Booking -->
+        <div id="booking-section" class="hidden" dir="ltr">
+            <h2 class="text-xl font-bold text-center text-white mb-2">Bienvenue <span id="booking-name" class="text-sky-400"></span></h2>
+            <p class="text-center text-slate-400 mb-6 text-sm">Veuillez choisir votre créneau d'entretien (13h00 - 16h00)</p>
+            
+            <div id="slots-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <!-- Slots injected here via JS -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // === SUPABASE CONFIGURATION ===
+        const SUPABASE_URL = 'https://bqsvdijbfdzzufkdwhhu.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_Ux4T1anrNknphRgb_yByNQ_lvrmuzCr';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+        let allBookings = [];
+
+        // UI Elements
+        const loginSection = document.getElementById('login-section');
+        const bookedSection = document.getElementById('booked-section');
+        const bookingSection = document.getElementById('booking-section');
+        const phoneInput = document.getElementById('phone-input');
+        const loginBtn = document.getElementById('login-btn');
+        const errorMsg = document.getElementById('error-msg');
+        const slotsGrid = document.getElementById('slots-grid');
+
+        // Generate Time Slots (13:00 to 16:00, 10 min intervals)
+        const generateSlots = () => {
+            let slots = [];
+            let start = new Date();
+            start.setHours(13, 0, 0, 0);
+            let end = new Date();
+            end.setHours(16, 0, 0, 0);
+
+            while(start < end) {
+                let timeString = start.toTimeString().substring(0, 5); // e.g. "13:00"
+                timeString = timeString.replace(':', 'h'); // "13h00"
+                slots.push(timeString);
+                start.setMinutes(start.getMinutes() + 10);
+            }
+            return slots;
+        };
+
+        const availableSlots = generateSlots();
+
+        // 1. Handle Login
+        loginBtn.addEventListener('click', async () => {
+            const phone = phoneInput.value.trim();
+            if(!phone) return;
+
+            loginBtn.textContent = "Recherche...";
+            loginBtn.disabled = true;
+            errorMsg.classList.add('hidden');
+
+            // Fetch user
+            const { data: user, error: userError } = await supabase
+                .from('candidates')
+                .select('*')
+                .eq('phone', phone)
+                .single();
+
+            if (userError || !user) {
+                errorMsg.textContent = "Numéro introuvable. Veuillez vérifier ou contacter le club.";
+                errorMsg.classList.remove('hidden');
+                loginBtn.textContent = "Rechercher / بحث";
+                loginBtn.disabled = false;
+                return;
+            }
+
+            currentUser = user;
+
+            // Check if already booked
+            if (currentUser.slot_time) {
+                showBookedState();
+            } else {
+                await loadAndShowSlots();
+            }
+        });
+
+        // 2. Show Already Booked State
+        function showBookedState() {
+            loginSection.classList.add('hidden');
+            bookingSection.classList.add('hidden');
+            bookedSection.classList.remove('hidden');
+
+            document.getElementById('user-name').textContent = currentUser.full_name;
+            document.getElementById('booked-time').textContent = currentUser.slot_time;
+            document.getElementById('booked-table').textContent = currentUser.table_num;
+        }
+
+        // 3. Load Slots and Show Booking Interface
+        async function loadAndShowSlots() {
+            // Fetch all booked slots to calculate availability (Max 3 per slot)
+            const { data: bookings } = await supabase
+                .from('candidates')
+                .select('slot_time, table_num')
+                .not('slot_time', 'is', null);
+            
+            allBookings = bookings || [];
+
+            // Calculate how many people are in each slot
+            const slotCounts = {};
+            allBookings.forEach(b => {
+                slotCounts[b.slot_time] = (slotCounts[b.slot_time] || 0) + 1;
+            });
+
+            loginSection.classList.add('hidden');
+            document.getElementById('booking-name').textContent = currentUser.full_name;
+            bookingSection.classList.remove('hidden');
+
+            slotsGrid.innerHTML = '';
+
+            availableSlots.forEach(time => {
+                const count = slotCounts[time] || 0;
+                const isFull = count >= 3;
+
+                const btn = document.createElement('button');
+                btn.className = `py-3 px-2 rounded-lg text-sm font-bold border transition ${
+                    isFull 
+                    ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' 
+                    : 'bg-slate-800 border-sky-500/30 text-sky-300 hover:bg-sky-500 hover:text-slate-900 hover:glow-blue'
+                }`;
+                btn.textContent = time;
+                
+                if (isFull) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<span class="line-through">${time}</span><br><span class="text-[10px] font-normal">Complet</span>`;
+                } else {
+                    btn.onclick = () => bookSlot(time);
+                }
+
+                slotsGrid.appendChild(btn);
+            });
+        }
+
+        // 4. Handle Booking
+        async function bookSlot(selectedTime) {
+            if(!confirm(`Confirmer la réservation pour ${selectedTime} ?`)) return;
+
+            // Re-fetch existing bookings for this exact slot to safely assign Table 1, 2, or 3
+            const { data: currentSlotBookings } = await supabase
+                .from('candidates')
+                .select('table_num')
+                .eq('slot_time', selectedTime);
+            
+            const usedTables = (currentSlotBookings || []).map(b => b.table_num);
+            let assignedTable = [1, 2, 3].find(t => !usedTables.includes(t));
+
+            if (!assignedTable) {
+                alert("Désolé, ce créneau vient d'être rempli par d'autres candidats. Veuillez en choisir un autre.");
+                await loadAndShowSlots(); // Refresh UI
+                return;
+            }
+
+            // Save to DB
+            const { error } = await supabase
+                .from('candidates')
+                .update({ slot_time: selectedTime, table_num: assignedTable })
+                .eq('phone', currentUser.phone);
+
+            if (!error) {
+                currentUser.slot_time = selectedTime;
+                currentUser.table_num = assignedTable;
+                showBookedState();
+            } else {
+                alert("Une erreur s'est produite. Veuillez réessayer.");
+            }
+        }
+    </script>
+</body>
+</html>
