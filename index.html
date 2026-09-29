@@ -19,7 +19,7 @@
         
         <!-- Header & Logo -->
         <div class="text-center mb-8">
-            <img src="logo.jpg" alt="Tawassol Sihi Logo" class="w-28 h-28 mx-auto rounded-full border-2 border-sky-400 glow-blue mb-4 object-cover">
+            <img src="logo.jpg" alt="Tawassol Sihi Logo" class="w-28 h-28 mx-auto rounded-full border-2 border-sky-400 glow-blue mb-4 object-cover" onerror="this.style.display='none'">
             <h1 class="text-3xl font-extrabold text-sky-400 mb-2">منصة مقابلات نادي التواصل الصحي</h1>
             <p class="text-slate-400 text-sm" dir="ltr">Plateforme de Recrutement Automatisée</p>
         </div>
@@ -73,7 +73,9 @@
         // === SUPABASE CONFIGURATION ===
         const SUPABASE_URL = 'https://bqsvdijbfdzzufkdwhhu.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_Ux4T1anrNknphRgb_yByNQ_lvrmuzCr';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Use supabaseClient to prevent variable naming conflicts
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let currentUser = null;
         let allBookings = [];
@@ -96,8 +98,8 @@
             end.setHours(16, 0, 0, 0);
 
             while(start < end) {
-                let timeString = start.toTimeString().substring(0, 5); // e.g. "13:00"
-                timeString = timeString.replace(':', 'h'); // "13h00"
+                let timeString = start.toTimeString().substring(0, 5); 
+                timeString = timeString.replace(':', 'h'); 
                 slots.push(timeString);
                 start.setMinutes(start.getMinutes() + 10);
             }
@@ -115,28 +117,33 @@
             loginBtn.disabled = true;
             errorMsg.classList.add('hidden');
 
-            // Fetch user
-            const { data: user, error: userError } = await supabase
-                .from('candidates')
-                .select('*')
-                .eq('phone', phone)
-                .single();
+            try {
+                const { data: user, error: userError } = await supabaseClient
+                    .from('candidates')
+                    .select('*')
+                    .eq('phone', phone)
+                    .single();
 
-            if (userError || !user) {
-                errorMsg.textContent = "Numéro introuvable. Veuillez vérifier ou contacter le club.";
+                if (userError || !user) {
+                    errorMsg.textContent = "Numéro introuvable. Veuillez vérifier ou contacter le club.";
+                    errorMsg.classList.remove('hidden');
+                    loginBtn.textContent = "Rechercher / بحث";
+                    loginBtn.disabled = false;
+                    return;
+                }
+
+                currentUser = user;
+
+                if (currentUser.slot_time) {
+                    showBookedState();
+                } else {
+                    await loadAndShowSlots();
+                }
+            } catch (err) {
+                errorMsg.textContent = "Erreur de connexion. Réessayez.";
                 errorMsg.classList.remove('hidden');
                 loginBtn.textContent = "Rechercher / بحث";
                 loginBtn.disabled = false;
-                return;
-            }
-
-            currentUser = user;
-
-            // Check if already booked
-            if (currentUser.slot_time) {
-                showBookedState();
-            } else {
-                await loadAndShowSlots();
             }
         });
 
@@ -153,15 +160,13 @@
 
         // 3. Load Slots and Show Booking Interface
         async function loadAndShowSlots() {
-            // Fetch all booked slots to calculate availability (Max 3 per slot)
-            const { data: bookings } = await supabase
+            const { data: bookings } = await supabaseClient
                 .from('candidates')
                 .select('slot_time, table_num')
                 .not('slot_time', 'is', null);
             
             allBookings = bookings || [];
 
-            // Calculate how many people are in each slot
             const slotCounts = {};
             allBookings.forEach(b => {
                 slotCounts[b.slot_time] = (slotCounts[b.slot_time] || 0) + 1;
@@ -175,7 +180,7 @@
 
             availableSlots.forEach(time => {
                 const count = slotCounts[time] || 0;
-                const isFull = count >= 3;
+                const isFull = count >= 3; // 3 tables limit
 
                 const btn = document.createElement('button');
                 btn.className = `py-3 px-2 rounded-lg text-sm font-bold border transition ${
@@ -200,8 +205,7 @@
         async function bookSlot(selectedTime) {
             if(!confirm(`Confirmer la réservation pour ${selectedTime} ?`)) return;
 
-            // Re-fetch existing bookings for this exact slot to safely assign Table 1, 2, or 3
-            const { data: currentSlotBookings } = await supabase
+            const { data: currentSlotBookings } = await supabaseClient
                 .from('candidates')
                 .select('table_num')
                 .eq('slot_time', selectedTime);
@@ -211,12 +215,11 @@
 
             if (!assignedTable) {
                 alert("Désolé, ce créneau vient d'être rempli par d'autres candidats. Veuillez en choisir un autre.");
-                await loadAndShowSlots(); // Refresh UI
+                await loadAndShowSlots(); 
                 return;
             }
 
-            // Save to DB
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('candidates')
                 .update({ slot_time: selectedTime, table_num: assignedTable })
                 .eq('phone', currentUser.phone);
