@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - Tawassol Sihi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); }
+        .glow-blue { box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
+
+    <!-- LOGIN SECTION -->
+    <div id="admin-login" class="max-w-md mx-auto mt-20 glass border border-slate-800 p-8 rounded-3xl shadow-2xl text-center">
+        <h1 class="text-2xl font-extrabold text-sky-400 mb-2">لوحة الإدارة</h1>
+        <p class="text-slate-400 text-sm mb-6" dir="ltr">Espace Administrateur</p>
+        
+        <input type="password" id="password-input" placeholder="Mot de passe" dir="ltr" class="w-full px-4 py-3 mb-4 bg-slate-900 border border-slate-700 rounded-xl focus:outline-none focus:border-sky-400 text-center text-white tracking-widest">
+        
+        <button id="login-btn" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl transition glow-blue">
+            Accéder / دخول
+        </button>
+        <p id="login-error" class="text-red-400 text-sm mt-4 hidden">Mot de passe incorrect</p>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="admin-dashboard" class="hidden max-w-7xl mx-auto space-y-8">
+        <div class="text-center">
+            <h1 class="text-3xl font-extrabold text-sky-400 mb-2">جدول المقابلات</h1>
+            <p class="text-slate-400 text-sm mb-8" dir="ltr">Planning des entretiens par jury</p>
+            <button id="refresh-btn" class="px-6 py-2 bg-slate-800 border border-sky-500/50 text-sky-400 rounded-lg hover:bg-slate-700 transition mb-6">
+                Rafraîchir les données 🔄
+            </button>
+        </div>
+
+        <!-- Tables Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" dir="ltr">
+            
+            <!-- Table 1 -->
+            <div class="glass border border-slate-700 rounded-2xl p-6">
+                <div class="text-center pb-4 mb-4 border-b border-slate-700">
+                    <h2 class="text-2xl font-bold text-white">Table 1</h2>
+                </div>
+                <div id="table-1-list" class="space-y-3">
+                    <!-- Data injected here -->
+                </div>
+            </div>
+
+            <!-- Table 2 -->
+            <div class="glass border border-slate-700 rounded-2xl p-6">
+                <div class="text-center pb-4 mb-4 border-b border-slate-700">
+                    <h2 class="text-2xl font-bold text-white">Table 2</h2>
+                </div>
+                <div id="table-2-list" class="space-y-3">
+                    <!-- Data injected here -->
+                </div>
+            </div>
+
+            <!-- Table 3 -->
+            <div class="glass border border-slate-700 rounded-2xl p-6">
+                <div class="text-center pb-4 mb-4 border-b border-slate-700">
+                    <h2 class="text-2xl font-bold text-white">Table 3</h2>
+                </div>
+                <div id="table-3-list" class="space-y-3">
+                    <!-- Data injected here -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // === CONFIGURATION ===
+        const ADMIN_PASSWORD = "admin2026"; // Change this if you want a different password
+        const SUPABASE_URL = 'https://bqsvdijbfdzzufkdwhhu.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_Ux4T1anrNknphRgb_yByNQ_lvrmuzCr';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Elements
+        const loginSection = document.getElementById('admin-login');
+        const dashboardSection = document.getElementById('admin-dashboard');
+        const passwordInput = document.getElementById('password-input');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+        const refreshBtn = document.getElementById('refresh-btn');
+
+        // Login Logic
+        loginBtn.addEventListener('click', () => {
+            if (passwordInput.value === ADMIN_PASSWORD) {
+                loginSection.classList.add('hidden');
+                dashboardSection.classList.remove('hidden');
+                loadDashboardData();
+            } else {
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        // Allow pressing Enter to login
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+
+        refreshBtn.addEventListener('click', loadDashboardData);
+
+        // Fetch and display data
+        async function loadDashboardData() {
+            refreshBtn.textContent = "Chargement...";
+            
+            // Get all candidates who have booked a slot, ordered by time
+            const { data, error } = await supabaseClient
+                .from('candidates')
+                .select('*')
+                .not('slot_time', 'is', null)
+                .order('slot_time', { ascending: true });
+
+            refreshBtn.textContent = "Rafraîchir les données 🔄";
+
+            if (error) {
+                alert("Erreur lors de la récupération des données.");
+                console.error(error);
+                return;
+            }
+
+            // Clear existing lists
+            document.getElementById('table-1-list').innerHTML = '';
+            document.getElementById('table-2-list').innerHTML = '';
+            document.getElementById('table-3-list').innerHTML = '';
+
+            // Populate lists
+            data.forEach(candidate => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-800/80 p-3 rounded-lg flex justify-between items-center border-l-4 border-sky-500 hover:bg-slate-700 transition";
+                
+                card.innerHTML = `
+                    <div class="flex flex-col">
+                        <span class="font-bold text-slate-100 text-sm uppercase">${candidate.slot_time}</span>
+                        <span class="text-xs text-slate-400">${candidate.phone}</span>
+                    </div>
+                    <div class="text-right flex-1 ml-4" dir="rtl">
+                        <span class="font-medium text-white text-sm">${candidate.full_name}</span>
+                    </div>
+                `;
+
+                if (candidate.table_num === 1) document.getElementById('table-1-list').appendChild(card);
+                else if (candidate.table_num === 2) document.getElementById('table-2-list').appendChild(card);
+                else if (candidate.table_num === 3) document.getElementById('table-3-list').appendChild(card);
+            });
+
+            // Handle empty states
+            [1, 2, 3].forEach(num => {
+                const list = document.getElementById(`table-${num}-list`);
+                if (list.innerHTML === '') {
+                    list.innerHTML = '<p class="text-center text-slate-500 text-sm mt-4">Aucun candidat pour le moment.</p>';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
